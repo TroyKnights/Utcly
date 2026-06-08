@@ -249,26 +249,30 @@ export default function TimezoneConverter() {
         <div className="absolute top-[30%] right-[20%] w-[40vw] h-[40vw] rounded-full bg-cyan-500/10 blur-[140px]" />
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-10 sm:py-14">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-8 sm:py-14">
         {/* Header */}
-        <header className="mb-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-xl border border-white/15 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 7v5l3 2" strokeLinecap="round" />
-              </svg>
+        <header className="mb-8 sm:mb-10">
+          <div className="font-mono">
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mb-1">
+              <span className="text-emerald-400">user@utcly</span>
+              <span className="text-slate-500">:</span>
+              <span className="text-indigo-300">~</span>
+              <span className="text-slate-500">$</span>
+              <span className="text-slate-300">date -u</span>
+              <span className="ml-1 inline-block w-2 h-4 bg-slate-300 animate-pulse" aria-hidden="true" />
             </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Zonepilot</h1>
-              <p className="text-xs text-slate-400 tracking-wide">UTC conversion · meeting planning · for humans</p>
-            </div>
+            <h1 className="text-3xl sm:text-5xl font-mono font-medium tracking-tight text-slate-100">
+              <span className="text-slate-500">/</span>utcly<span className="text-slate-500">/</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-2 font-mono">
+              # convert any zone to utc · plan meetings across zones
+            </p>
           </div>
         </header>
 
         {/* Live clock card */}
         <section
-          className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] p-6 sm:p-8 mb-6 animate-[fadeIn_0.5s_ease-out]"
+          className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] p-4 sm:p-8 mb-6 animate-[fadeIn_0.5s_ease-out]"
         >
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">Live clock</h2>
@@ -306,11 +310,11 @@ export default function TimezoneConverter() {
         {tab === "convert" && (
           <section
             key="convert"
-            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-6 sm:p-8 animate-[fadeIn_0.4s_ease-out]"
+            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out]"
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Convert a time to UTC</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 min-w-0">
               {/* Zone selector */}
               <div className="sm:col-span-3 relative">
                 <Label>From timezone</Label>
@@ -359,25 +363,25 @@ export default function TimezoneConverter() {
                 )}
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <Label>Date</Label>
                 <input
                   type="date"
                   value={convDate}
                   onChange={(e) => setConvDate(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Time</Label>
                 <input
                   type="time"
                   value={convTime}
                   onChange={(e) => setConvTime(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Quick set</Label>
                 <button
                   onClick={() => {
@@ -429,35 +433,35 @@ export default function TimezoneConverter() {
         {tab === "meeting" && (
           <section
             key="meeting"
-            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-6 sm:p-8 animate-[fadeIn_0.4s_ease-out]"
+            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out]"
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Plan a meeting</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 min-w-0">
+              <div className="min-w-0">
                 <Label>Date</Label>
                 <input
                   type="date"
                   value={meetDate}
                   onChange={(e) => setMeetDate(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Start time ({userTZ.split("/").pop().replace("_", " ")})</Label>
                 <input
                   type="time"
                   value={meetTime}
                   onChange={(e) => setMeetTime(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Duration</Label>
                 <select
                   value={meetDur}
                   onChange={(e) => setMeetDur(Number(e.target.value))}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 >
                   <option value={15}>15 min</option>
                   <option value={30}>30 min</option>
@@ -468,12 +472,12 @@ export default function TimezoneConverter() {
                   <option value={180}>3 hours</option>
                 </select>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Target zone</Label>
                 <select
                   value={meetZone}
                   onChange={(e) => setMeetZone(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
                 >
                   {CITIES.map((c) => (
                     <option key={c.tz} value={c.tz}>
