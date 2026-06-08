@@ -87,6 +87,105 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
+// --- Document-paste conversion: timezone abbreviation map ---
+// Maps common timezone abbreviations and names to UTC offset in hours.
+// Handles both standard and daylight variants. Order matters for matching.
+const TZ_ABBREVIATIONS = {
+  // North America
+  EST: -5, EDT: -4, ET: -5, "EASTERN TIME": -5, EASTERN: -5,
+  CST: -6, CDT: -5, CT: -6, "CENTRAL TIME": -6, CENTRAL: -6,
+  MST: -7, MDT: -6, MT: -7, "MOUNTAIN TIME": -7, MOUNTAIN: -7,
+  PST: -8, PDT: -7, PT: -8, "PACIFIC TIME": -8, PACIFIC: -8,
+  AKST: -9, AKDT: -8, ALASKA: -9,
+  HST: -10, HAWAII: -10,
+  AST: -4, ADT: -3, ATLANTIC: -4,
+  NST: -3.5, NDT: -2.5, NEWFOUNDLAND: -3.5,
+  // Europe
+  GMT: 0, UTC: 0, Z: 0, ZULU: 0,
+  BST: 1, "BRITISH SUMMER TIME": 1,
+  WET: 0, WEST: 1,
+  CET: 1, CEST: 2, "CENTRAL EUROPEAN": 1,
+  EET: 2, EEST: 3, "EASTERN EUROPEAN": 2,
+  MSK: 3, MOSCOW: 3,
+  // Asia
+  IST: 5.5, "INDIA STANDARD TIME": 5.5, INDIA: 5.5,
+  PKT: 5, PAKISTAN: 5,
+  ICT: 7, "INDOCHINA TIME": 7,
+  SGT: 8, SINGAPORE: 8,
+  HKT: 8, "HONG KONG": 8,
+  CST_CHINA: 8, // disambiguated below
+  JST: 9, JAPAN: 9, TOKYO: 9,
+  KST: 9, KOREA: 9,
+  // Oceania
+  AEST: 10, AEDT: 11, "EASTERN AUSTRALIA": 10,
+  ACST: 9.5, ACDT: 10.5,
+  AWST: 8, "WESTERN AUSTRALIA": 8,
+  NZST: 12, NZDT: 13, "NEW ZEALAND": 12,
+  // Africa & Middle East
+  SAST: 2, "SOUTH AFRICA": 2,
+  EAT: 3, "EAST AFRICA": 3,
+  GST: 4, "GULF STANDARD": 4, DUBAI: 4,
+  IRST: 3.5, IRAN: 3.5,
+  // South America
+  BRT: -3, BRAZIL: -3, "BRASILIA": -3,
+  ART: -3, ARGENTINA: -3,
+  CLT: -4, CHILE: -4,
+};
+
+// Regex that finds time expressions like "9am EST", "2:30 PM PST", "14:00 GMT"
+// Captures: full match, hour, minute (optional), am/pm (optional), timezone
+const TIME_REGEX = new RegExp(
+  // Time portion: "9", "9:30", "09:30"
+  '\\b(\\d{1,2})(?::(\\d{2}))?\\s*' +
+  // Optional am/pm
+  '(am|pm|AM|PM|a\\.m\\.|p\\.m\\.|A\\.M\\.|P\\.M\\.)?\\s*' +
+  // Required timezone abbreviation (3-5 letters, or known longer names)
+  '(EST|EDT|CST|CDT|MST|MDT|PST|PDT|AKST|AKDT|HST|AST|ADT|NST|NDT|' +
+  'ET|CT|MT|PT|' +
+  'GMT|UTC|BST|WET|WEST|CET|CEST|EET|EEST|MSK|' +
+  'IST|PKT|ICT|SGT|HKT|JST|KST|' +
+  'AEST|AEDT|ACST|ACDT|AWST|NZST|NZDT|' +
+  'SAST|EAT|GST|IRST|BRT|ART|CLT|Z)\\b',
+  'g'
+);
+
+// Convert one matched time expression to UTC. Returns "HH:MM UTC" string or null on failure.
+function convertMatchToUTC(hourStr, minStr, ampm, tz) {
+  let hour = parseInt(hourStr, 10);
+  const minute = minStr ? parseInt(minStr, 10) : 0;
+  if (isNaN(hour) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  // Handle am/pm
+  if (ampm) {
+    const isPM = /p/i.test(ampm);
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+  }
+
+  const offset = TZ_ABBREVIATIONS[tz.toUpperCase()];
+  if (offset === undefined) return null;
+
+  // Convert local time to UTC by subtracting offset
+  const totalMinutes = hour * 60 + minute - offset * 60;
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440;
+  const utcHour = Math.floor(wrapped / 60);
+  const utcMin = Math.round(wrapped % 60);
+  return `${pad(utcHour)}:${pad(utcMin)} UTC`;
+}
+
+// Run regex over text, replace each matched time expression with UTC equivalent.
+// Returns { converted: string, count: number, matches: array }
+function convertDocumentTimes(text) {
+  const matches = [];
+  const converted = text.replace(TIME_REGEX, (full, hour, min, ampm, tz) => {
+    const utc = convertMatchToUTC(hour, min, ampm, tz);
+    if (!utc) return full;
+    matches.push({ original: full.trim(), utc });
+    return utc;
+  });
+  return { converted, count: matches.length, matches };
+}
+
 // --- The component ---
 
 export default function TimezoneConverter() {
@@ -549,6 +648,9 @@ export default function TimezoneConverter() {
           </section>
         )}
 
+        {/* Document paste converter — always visible below the tabs */}
+        <DocumentConverter />
+
         <footer className="mt-10 text-center text-xs text-slate-500">
           Detected zone: <span className="text-slate-400">{userTZ}</span> · times shown in 24-hour format
         </footer>
@@ -861,5 +963,159 @@ function PickerColumn({ options, value, onChange }) {
         );
       })}
     </div>
+  );
+}
+
+// --- Paste a document, get all times converted to UTC inline ---
+function DocumentConverter() {
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [count, setCount] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const handleConvert = () => {
+    const { converted, count: matchCount } = convertDocumentTimes(input);
+    setOutput(converted);
+    setCount(matchCount);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
+
+  const handleExample = () => {
+    setInput(
+      "Standup at 9am EST, then design review at 2pm PST.\n" +
+      "Demo with the London team at 5pm GMT.\n" +
+      "Tokyo sync moved to 10:30 JST tomorrow."
+    );
+    setOutput("");
+    setCount(0);
+  };
+
+  const handleClear = () => {
+    setInput("");
+    setOutput("");
+    setCount(0);
+  };
+
+  return (
+    <section className="mt-8 rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 animate-[fadeIn_0.4s_ease-out]">
+      <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+        <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">
+          Paste a document — convert every time to UTC
+        </h2>
+        <span className="text-[10px] text-indigo-300 font-mono">// experimental</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        Recognizes formats like <span className="text-slate-300 font-mono">9am EST</span>,{" "}
+        <span className="text-slate-300 font-mono">2:30 PM PST</span>,{" "}
+        <span className="text-slate-300 font-mono">14:00 GMT</span>,{" "}
+        <span className="text-slate-300 font-mono">10:30 JST</span>.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        {/* Input */}
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <Label>Paste text</Label>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExample}
+                className="text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Try example
+              </button>
+              {input && (
+                <button
+                  onClick={handleClear}
+                  className="text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Paste your meeting notes, email, or schedule here..."
+            rows={8}
+            style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+            className="w-full min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-4 py-3 text-sm placeholder:text-slate-500 focus:outline-none focus:border-white/30 transition-all duration-200 resize-y font-mono leading-relaxed"
+          />
+        </div>
+
+        {/* Output */}
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <Label>Converted to UTC</Label>
+            {output && (
+              <button
+                onClick={handleCopy}
+                className="text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                {copied ? "Copied ✓" : "Copy"}
+              </button>
+            )}
+          </div>
+          <div
+            style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+            className="w-full min-w-0 min-h-[200px] rounded-xl border border-white/10 backdrop-blur-xl px-4 py-3 text-sm font-mono leading-relaxed whitespace-pre-wrap break-words"
+            aria-live="polite"
+          >
+            {output ? (
+              <ConvertedDisplay original={input} converted={output} />
+            ) : (
+              <span className="text-slate-600">Output appears here after conversion...</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Action row */}
+      <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+        <button
+          onClick={handleConvert}
+          disabled={!input.trim()}
+          className="rounded-xl border border-white/10 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          Convert all times →
+        </button>
+        {count > 0 && (
+          <span className="text-xs text-emerald-300 animate-[fadeIn_0.3s_ease-out]">
+            ✓ Converted {count} time{count === 1 ? "" : "s"}
+          </span>
+        )}
+        {output && count === 0 && (
+          <span className="text-xs text-amber-300">
+            No recognized time formats found
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Renders converted text with UTC times highlighted in indigo
+function ConvertedDisplay({ original, converted }) {
+  // Find all "HH:MM UTC" matches in converted output and highlight them
+  const parts = converted.split(/(\d{2}:\d{2} UTC)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^\d{2}:\d{2} UTC$/.test(part) ? (
+          <span key={i} className="text-indigo-300 bg-indigo-500/10 px-1 rounded">
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
   );
 }
