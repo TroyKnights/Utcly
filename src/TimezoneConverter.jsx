@@ -240,7 +240,7 @@ export default function TimezoneConverter() {
   }, [convZone]);
 
   return (
-    <div className="min-h-screen w-full font-sans text-slate-100 relative overflow-hidden bg-slate-950">
+    <div className="min-h-screen w-full max-w-full font-sans text-slate-100 relative overflow-x-hidden overflow-y-auto bg-slate-950">
       {/* Deep navy/purple atmospheric background */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1f] via-[#11102a] to-[#1a0f2e]" />
@@ -314,9 +314,9 @@ export default function TimezoneConverter() {
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Convert a time to UTC</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 min-w-0">
               {/* Zone selector */}
-              <div className="sm:col-span-3 relative">
+              <div className="md:col-span-3 relative min-w-0">
                 <Label>From timezone</Label>
                 <button
                   type="button"
@@ -365,21 +365,11 @@ export default function TimezoneConverter() {
 
               <div className="min-w-0">
                 <Label>Date</Label>
-                <input
-                  type="date"
-                  value={convDate}
-                  onChange={(e) => setConvDate(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
-                />
+                <DatePickerButton value={convDate} onChange={setConvDate} />
               </div>
               <div className="min-w-0">
                 <Label>Time</Label>
-                <input
-                  type="time"
-                  value={convTime}
-                  onChange={(e) => setConvTime(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
-                />
+                <TimePickerButton value={convTime} onChange={setConvTime} />
               </div>
               <div className="min-w-0">
                 <Label>Quick set</Label>
@@ -437,24 +427,14 @@ export default function TimezoneConverter() {
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Plan a meeting</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 min-w-0">
               <div className="min-w-0">
                 <Label>Date</Label>
-                <input
-                  type="date"
-                  value={meetDate}
-                  onChange={(e) => setMeetDate(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
-                />
+                <DatePickerButton value={meetDate} onChange={setMeetDate} />
               </div>
               <div className="min-w-0">
                 <Label>Start time ({userTZ.split("/").pop().replace("_", " ")})</Label>
-                <input
-                  type="time"
-                  value={meetTime}
-                  onChange={(e) => setMeetTime(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
-                />
+                <TimePickerButton value={meetTime} onChange={setMeetTime} />
               </div>
               <div className="min-w-0">
                 <Label>Duration</Label>
@@ -714,6 +694,172 @@ function OverlapBar({ startHour, endHour }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Button-styled date picker that matches the From timezone aesthetic ---
+function DatePickerButton({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const [y, m, d] = value.split("-").map(Number);
+  const display = new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let i = currentYear - 2; i <= currentYear + 5; i++) years.push(i);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const update = (newY, newM, newD) => {
+    const maxDay = new Date(newY, newM, 0).getDate();
+    const clampedDay = Math.min(newD, maxDay);
+    onChange(`${newY}-${String(newM).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+  };
+
+  return (
+    <div className="relative min-w-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 hover:bg-white/[0.08] hover:scale-[1.01] transition-all duration-200"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-slate-100 truncate">{display}</span>
+          <span className="text-xs text-slate-400 flex-shrink-0">▼</span>
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-slate-900/90 backdrop-blur-2xl p-3 animate-[fadeIn_0.18s_ease-out]">
+          <div className="grid grid-cols-3 gap-2">
+            <PickerColumn options={months.map((label, i) => ({ value: i + 1, label }))} value={m} onChange={(v) => update(y, v, d)} />
+            <PickerColumn options={days.map((dd) => ({ value: dd, label: String(dd) }))} value={d} onChange={(v) => update(y, m, v)} />
+            <PickerColumn options={years.map((yy) => ({ value: yy, label: String(yy) }))} value={y} onChange={(v) => update(v, m, d)} />
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 text-xs text-slate-300 hover:bg-white/[0.08] transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Button-styled time picker matching same aesthetic ---
+function TimePickerButton({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const [h, mi] = value.split(":").map(Number);
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  const update = (newH, newMi) => {
+    onChange(`${String(newH).padStart(2, "0")}:${String(newMi).padStart(2, "0")}`);
+  };
+
+  // Snap displayed minute to nearest 5-min option for the picker, but show the actual value
+  const displayMinute = String(mi).padStart(2, "0");
+  const displayHour = String(h).padStart(2, "0");
+
+  return (
+    <div className="relative min-w-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 hover:bg-white/[0.08] hover:scale-[1.01] transition-all duration-200"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-slate-100 font-mono tabular-nums">
+            {displayHour}:{displayMinute}
+          </span>
+          <span className="text-xs text-slate-400 flex-shrink-0">▼</span>
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-slate-900/90 backdrop-blur-2xl p-3 animate-[fadeIn_0.18s_ease-out]">
+          <div className="grid grid-cols-2 gap-2">
+            <PickerColumn
+              options={hours.map((hh) => ({ value: hh, label: String(hh).padStart(2, "0") }))}
+              value={h}
+              onChange={(v) => update(v, mi)}
+            />
+            <PickerColumn
+              options={minutes.map((mm) => ({ value: mm, label: String(mm).padStart(2, "0") }))}
+              value={mi >= 58 ? 55 : minutes.reduce((prev, curr) => (Math.abs(curr - mi) < Math.abs(prev - mi) ? curr : prev))}
+              onChange={(v) => update(h, v)}
+            />
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 text-xs text-slate-300 hover:bg-white/[0.08] transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Scrollable column of options used inside the date/time pickers
+function PickerColumn({ options, value, onChange }) {
+  const ref = useRef(null);
+
+  // Scroll selected item into view when opened
+  useEffect(() => {
+    const el = ref.current?.querySelector('[data-selected="true"]');
+    if (el) el.scrollIntoView({ block: "center" });
+  }, []);
+
+  return (
+    <div ref={ref} className="max-h-48 overflow-y-auto rounded-lg bg-white/[0.02] border border-white/5 p-1">
+      {options.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            data-selected={selected}
+            onClick={() => onChange(opt.value)}
+            className={`w-full text-center text-sm py-1.5 rounded-md transition-colors ${
+              selected
+                ? "bg-indigo-500/30 text-white"
+                : "text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
