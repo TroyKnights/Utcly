@@ -369,7 +369,7 @@ export default function TimezoneConverter() {
                   type="date"
                   value={convDate}
                   onChange={(e) => setConvDate(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 />
               </div>
               <div className="min-w-0">
@@ -378,7 +378,7 @@ export default function TimezoneConverter() {
                   type="time"
                   value={convTime}
                   onChange={(e) => setConvTime(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 />
               </div>
               <div className="min-w-0">
@@ -444,7 +444,7 @@ export default function TimezoneConverter() {
                   type="date"
                   value={meetDate}
                   onChange={(e) => setMeetDate(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 />
               </div>
               <div className="min-w-0">
@@ -453,7 +453,7 @@ export default function TimezoneConverter() {
                   type="time"
                   value={meetTime}
                   onChange={(e) => setMeetTime(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 />
               </div>
               <div className="min-w-0">
@@ -461,7 +461,7 @@ export default function TimezoneConverter() {
                 <select
                   value={meetDur}
                   onChange={(e) => setMeetDur(Number(e.target.value))}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 >
                   <option value={15}>15 min</option>
                   <option value={30}>30 min</option>
@@ -477,7 +477,7 @@ export default function TimezoneConverter() {
                 <select
                   value={meetZone}
                   onChange={(e) => setMeetZone(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/30 bg-white/90 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-black focus:outline-none focus:border-white/60 [color-scheme:light]"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 >
                   {CITIES.map((c) => (
                     <option key={c.tz} value={c.tz}>
