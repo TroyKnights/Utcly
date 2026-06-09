@@ -619,7 +619,7 @@ export default function TimezoneConverter() {
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Plan a meeting</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 min-w-0">
               <div className="min-w-0">
                 <Label>Date</Label>
                 <DatePickerButton value={meetDate} onChange={setMeetDate} />
@@ -633,15 +633,17 @@ export default function TimezoneConverter() {
                 <select
                   value={meetDur}
                   onChange={(e) => setMeetDur(Number(e.target.value))}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
+                  aria-label="Meeting duration"
+                  style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+                  className="w-full min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 >
-                  <option value={15}>15 min</option>
-                  <option value={30}>30 min</option>
-                  <option value={45}>45 min</option>
-                  <option value={60}>1 hour</option>
-                  <option value={90}>1.5 hours</option>
-                  <option value={120}>2 hours</option>
-                  <option value={180}>3 hours</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={15}>15 min</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={30}>30 min</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={45}>45 min</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={60}>1 hour</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={90}>1.5 hours</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={120}>2 hours</option>
+                  <option style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }} value={180}>3 hours</option>
                 </select>
               </div>
               <div className="min-w-0">
@@ -649,10 +651,12 @@ export default function TimezoneConverter() {
                 <select
                   value={meetZone}
                   onChange={(e) => setMeetZone(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 sm:px-4 py-3 text-sm text-slate-100 hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
+                  aria-label="Target timezone"
+                  style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+                  className="w-full min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-3 sm:px-4 py-3 text-sm hover:bg-white/[0.08] focus:outline-none focus:border-white/30 transition-all duration-200 [color-scheme:dark]"
                 >
                   {CITIES.map((c) => (
-                    <option key={c.tz} value={c.tz}>
+                    <option key={c.tz} value={c.tz} style={{ backgroundColor: "#0f172a", color: "#f1f5f9" }}>
                       {c.city} ({c.country})
                     </option>
                   ))}
@@ -816,11 +820,16 @@ export default function TimezoneConverter() {
         [data-theme="light"] .text-slate-600 { color: #94a3b8 !important; }
         [data-theme="light"] .placeholder\\:text-slate-500::placeholder { color: #94a3b8 !important; }
         [data-theme="light"] .placeholder\\:text-slate-600::placeholder { color: #cbd5e1 !important; }
-        /* Inline-styled boxes (textareas, output panes) need an override too */
+        /* Inline-styled boxes (textareas, output panes, selects) need an override too */
         [data-theme="light"] textarea[style],
         [data-theme="light"] input[type="text"][style],
-        [data-theme="light"] div[aria-live="polite"][style] {
+        [data-theme="light"] div[aria-live="polite"][style],
+        [data-theme="light"] select[style] {
           background-color: rgba(255, 255, 255, 0.75) !important;
+          color: #0f172a !important;
+        }
+        [data-theme="light"] option[style] {
+          background-color: #ffffff !important;
           color: #0f172a !important;
         }
         /* Popover backgrounds (zone selector, date/time picker popups) */
