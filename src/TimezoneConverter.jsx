@@ -166,6 +166,19 @@ const TIME_REGEX = new RegExp(
   'g'
 );
 
+// Regex for times WITHOUT a timezone — strict to avoid false positives
+// like matching "2024" or bare numbers. Requires either am/pm OR a colon.
+// The (?:\s*…) grouping ensures we only consume whitespace if am/pm follows,
+// preventing the trailing space from being eaten when there's no am/pm.
+const TIME_REGEX_NO_TZ = new RegExp(
+  // Branch 1: HH:MM with optional am/pm — colon makes it look like a time
+  '\\b(\\d{1,2}):(\\d{2})(?:\\s*(am|pm|AM|PM|a\\.m\\.|p\\.m\\.|A\\.M\\.|P\\.M\\.))?' +
+  '|' +
+  // Branch 2: bare hour + REQUIRED am/pm (e.g., "9am", "2 PM")
+  '\\b(\\d{1,2})\\s*(am|pm|AM|PM|a\\.m\\.|p\\.m\\.|A\\.M\\.|P\\.M\\.)',
+  'g'
+);
+
 // Convert one matched time expression to UTC. Returns "HH:MM UTC" string or null on failure.
 function convertMatchToUTC(hourStr, minStr, ampm, tz) {
   let hour = parseInt(hourStr, 10);
@@ -179,8 +192,15 @@ function convertMatchToUTC(hourStr, minStr, ampm, tz) {
     if (!isPM && hour === 12) hour = 0;
   }
 
-  const offset = TZ_ABBREVIATIONS[tz.toUpperCase()];
-  if (offset === undefined) return null;
+  // Resolve timezone: either a numeric offset (for IANA default zones) or an abbreviation
+  let offset;
+  if (typeof tz === "number") {
+    offset = tz;
+  } else if (TZ_ABBREVIATIONS[tz.toUpperCase()] !== undefined) {
+    offset = TZ_ABBREVIATIONS[tz.toUpperCase()];
+  } else {
+    return null;
+  }
 
   // Convert local time to UTC by subtracting offset
   const totalMinutes = hour * 60 + minute - offset * 60;
@@ -190,16 +210,47 @@ function convertMatchToUTC(hourStr, minStr, ampm, tz) {
   return `${pad(utcHour)}:${pad(utcMin)} UTC`;
 }
 
-// Run regex over text, replace each matched time expression with UTC equivalent.
-// Returns { converted: string, count: number, matches: array }
-function convertDocumentTimes(text) {
+// Two-pass conversion with placeholder protection:
+// Pass 1: match times WITH explicit timezone, replace with placeholders so Pass 2 can't touch them
+// Pass 2: match remaining times WITHOUT a timezone, convert using defaultTzOffsetHours
+// Then restore the Pass 1 placeholders with their UTC values.
+function convertDocumentTimes(text, defaultTzOffsetHours) {
   const matches = [];
-  const converted = text.replace(TIME_REGEX, (full, hour, min, ampm, tz) => {
+  const placeholders = [];
+  const PLACEHOLDER = (i) => `\u0001P${i}\u0001`;
+
+  // Pass 1: explicit timezone matches → placeholder so Pass 2 can't re-convert them
+  let working = text.replace(TIME_REGEX, (full, hour, min, ampm, tz) => {
     const utc = convertMatchToUTC(hour, min, ampm, tz);
     if (!utc) return full;
-    matches.push({ original: full.trim(), utc });
-    return utc;
+    matches.push({ original: full.trim(), utc, source: "explicit" });
+    const idx = placeholders.length;
+    placeholders.push(utc);
+    return PLACEHOLDER(idx);
   });
+
+  // Pass 2: no-timezone matches with default offset (if provided)
+  if (defaultTzOffsetHours !== null && defaultTzOffsetHours !== undefined) {
+    working = working.replace(TIME_REGEX_NO_TZ, (full, h1, m1, ap1, h2, ap2) => {
+      // Branch 1 captures: h1, m1, ap1 (colon-based)
+      // Branch 2 captures: h2, ap2 (bare hour + am/pm)
+      const hour = h1 !== undefined ? h1 : h2;
+      const min = m1;
+      const ampm = ap1 || ap2;
+
+      // Sanity guard (regex should already enforce this, but belt-and-suspenders)
+      if (!ampm && !min) return full;
+
+      const utc = convertMatchToUTC(hour, min, ampm, defaultTzOffsetHours);
+      if (!utc) return full;
+      matches.push({ original: full.trim(), utc, source: "default" });
+      return utc;
+    });
+  }
+
+  // Restore placeholders to their final UTC strings
+  const converted = working.replace(/\u0001P(\d+)\u0001/g, (_, i) => placeholders[+i]);
+
   return { converted, count: matches.length, matches };
 }
 
@@ -746,7 +797,7 @@ export default function TimezoneConverter() {
         )}
 
         {/* Document paste converter — always visible below the tabs */}
-        <DocumentConverter isBento={isBento} />
+        <DocumentConverter isBento={isBento} userTZ={userTZ} now={now} />
 
         {/* Epoch time converter — for developers and log-readers */}
         <EpochConverter isBento={isBento} now={now} />
@@ -1260,14 +1311,50 @@ function PickerColumn({ options, value, onChange, snapTo }) {
 // DOCUMENT CONVERTER UI
 // ═══════════════════════════════════════════════════════════════════
 
-function DocumentConverter({ isBento }) {
+function DocumentConverter({ isBento, userTZ, now }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [count, setCount] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // Default zone mode: "auto" uses detected userTZ, "custom" lets user type any abbreviation
+  const [zoneMode, setZoneMode] = useState("auto");
+  const [customAbbr, setCustomAbbr] = useState("");
+
+  // Resolve the actual offset to apply to no-tz times in the document
+  const defaultOffset = useMemo(() => {
+    if (zoneMode === "auto") {
+      // Get offset for user's detected IANA zone (e.g., "America/Toronto" → -5 or -4)
+      return getOffsetMinutes(now, userTZ) / 60;
+    }
+    if (zoneMode === "custom") {
+      const trimmed = customAbbr.trim().toUpperCase();
+      if (!trimmed) return null;
+      const offset = TZ_ABBREVIATIONS[trimmed];
+      return offset !== undefined ? offset : null;
+    }
+    return null; // "off" mode — only convert times that have explicit zones
+  }, [zoneMode, customAbbr, now, userTZ]);
+
+  // Pretty label for the current default zone (used in helper text)
+  const defaultZoneLabel = useMemo(() => {
+    if (zoneMode === "auto") {
+      const sign = defaultOffset >= 0 ? "+" : "−";
+      const abs = Math.abs(defaultOffset);
+      const h = Math.floor(abs);
+      const m = Math.round((abs - h) * 60);
+      return `${userTZ.split("/").pop().replace("_", " ")} (UTC${sign}${pad(h)}:${pad(m)})`;
+    }
+    if (zoneMode === "custom") {
+      return customAbbr.trim() ? customAbbr.trim().toUpperCase() : "—";
+    }
+    return "off";
+  }, [zoneMode, customAbbr, defaultOffset, userTZ]);
+
+  const customAbbrIsValid = zoneMode !== "custom" || (customAbbr.trim() && defaultOffset !== null);
+
   const handleConvert = () => {
-    const { converted, count: matchCount } = convertDocumentTimes(input);
+    const { converted, count: matchCount } = convertDocumentTimes(input, defaultOffset);
     setOutput(converted);
     setCount(matchCount);
   };
@@ -1282,7 +1369,7 @@ function DocumentConverter({ isBento }) {
 
   const handleExample = () => {
     setInput(
-      "Standup at 9am EST, then design review at 2pm PST.\n" +
+      "Standup at 9am, then design review at 2pm.\n" +
       "Demo with the London team at 5pm GMT.\n" +
       "Tokyo sync moved to 10:30 JST tomorrow."
     );
@@ -1307,11 +1394,77 @@ function DocumentConverter({ isBento }) {
         <span className="text-[10px] text-indigo-300 font-mono">// experimental</span>
       </div>
       <p className="text-xs text-slate-500 mb-4">
-        Recognizes formats like <span className="text-slate-300 font-mono">9am EST</span>,{" "}
-        <span className="text-slate-300 font-mono">2:30 PM PST</span>,{" "}
-        <span className="text-slate-300 font-mono">14:00 GMT</span>,{" "}
-        <span className="text-slate-300 font-mono">10:30 JST</span>.
+        Times with an explicit zone (e.g. <span className="text-slate-300 font-mono">5pm GMT</span>)
+        always use that zone. Times without a zone (e.g. <span className="text-slate-300 font-mono">9am</span>)
+        use the default zone below.
       </p>
+
+      {/* Default zone selector */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:p-4 mb-4">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400 mr-1">Default zone for un-tagged times:</span>
+          <button
+            onClick={() => setZoneMode("auto")}
+            className={`text-xs px-3 py-1 rounded-full border transition-all duration-200 ${
+              zoneMode === "auto"
+                ? "bg-indigo-500/20 border-indigo-400/30 text-indigo-200"
+                : "bg-white/[0.04] border-white/10 text-slate-400 hover:bg-white/[0.08]"
+            }`}
+          >
+            Auto (my zone)
+          </button>
+          <button
+            onClick={() => setZoneMode("custom")}
+            className={`text-xs px-3 py-1 rounded-full border transition-all duration-200 ${
+              zoneMode === "custom"
+                ? "bg-indigo-500/20 border-indigo-400/30 text-indigo-200"
+                : "bg-white/[0.04] border-white/10 text-slate-400 hover:bg-white/[0.08]"
+            }`}
+          >
+            Custom
+          </button>
+          <button
+            onClick={() => setZoneMode("off")}
+            className={`text-xs px-3 py-1 rounded-full border transition-all duration-200 ${
+              zoneMode === "off"
+                ? "bg-indigo-500/20 border-indigo-400/30 text-indigo-200"
+                : "bg-white/[0.04] border-white/10 text-slate-400 hover:bg-white/[0.08]"
+            }`}
+          >
+            Off (explicit only)
+          </button>
+        </div>
+        {zoneMode === "auto" && (
+          <p className="text-xs text-slate-400 font-mono">
+            → <span className="text-slate-200">{defaultZoneLabel}</span>
+          </p>
+        )}
+        {zoneMode === "custom" && (
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              type="text"
+              value={customAbbr}
+              onChange={(e) => setCustomAbbr(e.target.value)}
+              placeholder="e.g. EST, PST, GMT, JST"
+              aria-label="Custom timezone abbreviation"
+              style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+              className="flex-1 min-w-0 max-w-xs rounded-lg border border-white/10 px-3 py-1.5 text-sm font-mono uppercase placeholder:text-slate-500 focus:outline-none focus:border-white/30"
+            />
+            {customAbbr.trim() && (
+              defaultOffset !== null ? (
+                <span className="text-xs text-emerald-300 font-mono">
+                  ✓ UTC{defaultOffset >= 0 ? "+" : ""}{defaultOffset}
+                </span>
+              ) : (
+                <span className="text-xs text-rose-300">Unknown abbreviation</span>
+              )
+            )}
+          </div>
+        )}
+        {zoneMode === "off" && (
+          <p className="text-xs text-slate-500">Only times that include a timezone (like &quot;5pm GMT&quot;) will be converted.</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         {/* Input */}
