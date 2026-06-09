@@ -27,9 +27,22 @@ const CITIES = [
   { city: "Auckland", tz: "Pacific/Auckland", country: "NZ" },
   { city: "Cairo", tz: "Africa/Cairo", country: "Egypt" },
   { city: "Johannesburg", tz: "Africa/Johannesburg", country: "S. Africa" },
+  { city: "Lagos", tz: "Africa/Lagos", country: "Nigeria" },
+  { city: "Karachi", tz: "Asia/Karachi", country: "Pakistan" },
+  { city: "Manila", tz: "Asia/Manila", country: "Philippines" },
+  { city: "Kuala Lumpur", tz: "Asia/Kuala_Lumpur", country: "Malaysia" },
+  { city: "Buenos Aires", tz: "America/Argentina/Buenos_Aires", country: "Argentina" },
 ];
 
-// --- Time helpers (all use Intl, no external libs) ---
+
+// Shared card styling — used by every major section
+const CARD_CLASS =
+  "rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 animate-[fadeIn_0.4s_ease-out]";
+
+// ═══════════════════════════════════════════════════════════════════
+// TIME & TIMEZONE HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
 
 // Returns the wall-clock parts of a Date in a given IANA timezone.
 function getZonedParts(date, tz) {
@@ -87,7 +100,11 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
-// --- Document-paste conversion: timezone abbreviation map ---
+
+// ═══════════════════════════════════════════════════════════════════
+// DOCUMENT-PASTE CONVERSION (regex + abbreviation map)
+// ═══════════════════════════════════════════════════════════════════
+
 // Maps common timezone abbreviations and names to UTC offset in hours.
 // Handles both standard and daylight variants. Order matters for matching.
 const TZ_ABBREVIATIONS = {
@@ -186,7 +203,11 @@ function convertDocumentTimes(text) {
   return { converted, count: matches.length, matches };
 }
 
-// --- The component ---
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════
+
 
 export default function TimezoneConverter() {
   const userTZ = useMemo(
@@ -199,6 +220,26 @@ export default function TimezoneConverter() {
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
 
+  // Theme + layout preferences (persisted in localStorage)
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "dark";
+    return localStorage.getItem("utcly:theme") || "dark";
+  });
+  const [layout, setLayout] = useState(() => {
+    if (typeof window === "undefined") return "stack";
+    return localStorage.getItem("utcly:layout") || "stack";
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("utcly:theme", theme); } catch {}
+  }, [theme]);
+  useEffect(() => {
+    try { localStorage.setItem("utcly:layout", layout); } catch {}
+  }, [layout]);
+
+  const isLight = theme === "light";
+  const isBento = layout === "bento";
+
   // Live clock tick
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -209,7 +250,7 @@ export default function TimezoneConverter() {
   const showToast = (msg) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 1800);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
   };
 
   const copyToClipboard = async (text, label = "Copied") => {
@@ -244,6 +285,17 @@ export default function TimezoneConverter() {
         c.tz.toLowerCase().includes(q)
     );
   }, [zoneQuery]);
+
+  // Pre-compute offsets for all cities once per minute (offsets don't change
+  // within a minute, and recomputing 30 cities every second is wasteful).
+  const cityOffsets = useMemo(() => {
+    const map = {};
+    for (const c of CITIES) {
+      map[c.tz] = getOffsetMinutes(now, c.tz);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Math.floor(now.getTime() / 60000)]);
 
   const conversion = useMemo(() => {
     if (!convDate || !convTime) return null;
@@ -339,39 +391,74 @@ export default function TimezoneConverter() {
   }, [convZone]);
 
   return (
-    <div className="min-h-screen w-full max-w-full font-sans text-slate-100 relative overflow-x-hidden overflow-y-auto bg-slate-950">
-      {/* Deep navy/purple atmospheric background */}
+    <div
+      data-theme={theme}
+      data-layout={layout}
+      className={`min-h-screen w-full max-w-full font-sans relative overflow-x-hidden overflow-y-auto transition-colors duration-300 ${
+        isLight ? "text-slate-900 bg-slate-50" : "text-slate-100 bg-slate-950"
+      }`}
+    >
+      {/* Atmospheric background — adapts to theme */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1f] via-[#11102a] to-[#1a0f2e]" />
-        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-600/30 blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-fuchsia-600/20 blur-[120px]" />
-        <div className="absolute top-[30%] right-[20%] w-[40vw] h-[40vw] rounded-full bg-cyan-500/10 blur-[140px]" />
+        {isLight ? (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-indigo-50 to-fuchsia-50" />
+            <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-300/40 blur-[120px]" />
+            <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-fuchsia-300/30 blur-[120px]" />
+            <div className="absolute top-[30%] right-[20%] w-[40vw] h-[40vw] rounded-full bg-cyan-200/40 blur-[140px]" />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1f] via-[#11102a] to-[#1a0f2e]" />
+            <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-600/30 blur-[120px]" />
+            <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-fuchsia-600/20 blur-[120px]" />
+            <div className="absolute top-[30%] right-[20%] w-[40vw] h-[40vw] rounded-full bg-cyan-500/10 blur-[140px]" />
+          </>
+        )}
       </div>
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-8 sm:py-14">
-        {/* Header */}
-        <header className="mb-8 sm:mb-10">
-          <div className="font-mono">
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mb-1">
-              <span className="text-emerald-400">user@utcly</span>
-              <span className="text-slate-500">:</span>
-              <span className="text-indigo-300">~</span>
-              <span className="text-slate-500">$</span>
-              <span className="text-slate-300">date -u</span>
-              <span className="ml-1 inline-block w-2 h-4 bg-slate-300 animate-pulse" aria-hidden="true" />
+      <div className={`mx-auto px-3 sm:px-6 py-8 sm:py-14 ${isBento ? "max-w-7xl" : "max-w-5xl"}`}>
+        {/* Header + toolbar */}
+        <header className="mb-8 sm:mb-10 flex items-start justify-between gap-4 flex-wrap">
+          <div className="font-mono min-w-0">
+            <div className={`flex items-center gap-2 text-xs sm:text-sm mb-1 ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+              <span className={isLight ? "text-emerald-600" : "text-emerald-400"}>user@utcly</span>
+              <span className={isLight ? "text-slate-400" : "text-slate-500"}>:</span>
+              <span className={isLight ? "text-indigo-600" : "text-indigo-300"}>~</span>
+              <span className={isLight ? "text-slate-400" : "text-slate-500"}>$</span>
+              <span className={isLight ? "text-slate-700" : "text-slate-300"}>date -u</span>
+              <span
+                className={`ml-1 inline-block w-2 h-4 animate-pulse ${isLight ? "bg-slate-700" : "bg-slate-300"}`}
+                aria-hidden="true"
+              />
             </div>
-            <h1 className="text-3xl sm:text-5xl font-mono font-medium tracking-tight text-slate-100">
-              <span className="text-slate-500">/</span>utcly<span className="text-slate-500">/</span>
+            <h1 className={`text-3xl sm:text-5xl font-mono font-medium tracking-tight ${isLight ? "text-slate-900" : "text-slate-100"}`}>
+              <span className={isLight ? "text-slate-400" : "text-slate-500"}>/</span>
+              utcly
+              <span className={isLight ? "text-slate-400" : "text-slate-500"}>/</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-2 font-mono">
+            <p className={`text-xs sm:text-sm mt-2 font-mono ${isLight ? "text-slate-600" : "text-slate-400"}`}>
               # convert any zone to utc · plan meetings across zones
             </p>
           </div>
+
+          {/* Toolbar: theme + layout toggles */}
+          <Toolbar
+            theme={theme}
+            setTheme={setTheme}
+            layout={layout}
+            setLayout={setLayout}
+          />
         </header>
+
+        {/* Main content — wrapped in a bento grid when layout="bento" */}
+        <div className={isBento ? "grid grid-cols-1 lg:grid-cols-12 gap-4" : ""}>
 
         {/* Live clock card */}
         <section
-          className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] p-4 sm:p-8 mb-6 animate-[fadeIn_0.5s_ease-out]"
+          className={`rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] p-4 sm:p-8 animate-[fadeIn_0.5s_ease-out] ${
+            isBento ? "lg:col-span-12" : "mb-6"
+          }`}
         >
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">Live clock</h2>
@@ -395,21 +482,25 @@ export default function TimezoneConverter() {
           </div>
         </section>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4">
-          <TabButton active={tab === "convert"} onClick={() => setTab("convert")}>
-            Convert
-          </TabButton>
-          <TabButton active={tab === "meeting"} onClick={() => setTab("meeting")}>
-            Meeting planner
-          </TabButton>
-        </div>
+        {/* Tabs — only in stack mode; bento shows both panels simultaneously */}
+        {!isBento && (
+          <div className="flex gap-2 mb-4 mt-6">
+            <TabButton active={tab === "convert"} onClick={() => setTab("convert")}>
+              Convert
+            </TabButton>
+            <TabButton active={tab === "meeting"} onClick={() => setTab("meeting")}>
+              Meeting planner
+            </TabButton>
+          </div>
+        )}
 
-        {/* Convert panel */}
-        {tab === "convert" && (
+        {/* Convert panel — visible if stack+selected, or always in bento */}
+        {(isBento || tab === "convert") && (
           <section
             key="convert"
-            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out]"
+            className={`rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out] ${
+              isBento ? "lg:col-span-6" : ""
+            }`}
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Convert a time to UTC</h2>
 
@@ -454,7 +545,7 @@ export default function TimezoneConverter() {
                           {c.city} <span className="text-slate-500">· {c.country}</span>
                         </span>
                         <span className="text-xs text-slate-500">
-                          {formatOffset(getOffsetMinutes(now, c.tz))}
+                          {formatOffset(cityOffsets[c.tz] ?? 0)}
                         </span>
                       </button>
                     ))}
@@ -518,11 +609,13 @@ export default function TimezoneConverter() {
           </section>
         )}
 
-        {/* Meeting planner panel */}
-        {tab === "meeting" && (
+        {/* Meeting planner panel — visible if stack+selected, or always in bento */}
+        {(isBento || tab === "meeting") && (
           <section
             key="meeting"
-            className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out]"
+            className={`rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 min-w-0 overflow-hidden animate-[fadeIn_0.4s_ease-out] ${
+              isBento ? "lg:col-span-6" : ""
+            }`}
           >
             <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-6">Plan a meeting</h2>
 
@@ -649,7 +742,15 @@ export default function TimezoneConverter() {
         )}
 
         {/* Document paste converter — always visible below the tabs */}
-        <DocumentConverter />
+        <DocumentConverter isBento={isBento} />
+
+        {/* Epoch time converter — for developers and log-readers */}
+        <EpochConverter isBento={isBento} now={now} />
+
+        {/* Feedback section — copies pre-formatted message + my email */}
+        <FeedbackSection isBento={isBento} />
+
+        </div>{/* end of bento grid wrapper */}
 
         <footer className="mt-10 text-center text-xs text-slate-500">
           Detected zone: <span className="text-slate-400">{userTZ}</span> · times shown in 24-hour format
@@ -668,7 +769,7 @@ export default function TimezoneConverter() {
         </div>
       </div>
 
-      {/* Keyframes */}
+      {/* Keyframes + theme overrides */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(6px); }
@@ -678,12 +779,126 @@ export default function TimezoneConverter() {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25%      { transform: translateX(-4px); }
+          75%      { transform: translateX(4px); }
+        }
+        .shake { animation: shake 0.3s ease-in-out; }
+
+        /* Accessible focus rings on form elements */
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+          outline: 2px solid rgba(129, 140, 248, 0.6);
+          outline-offset: 2px;
+        }
+
+        /* ─── Light theme overrides ─── */
+        /* Override the dark-theme glassmorphism colors when the root has data-theme="light" */
+        [data-theme="light"] .bg-white\\/\\[0\\.04\\] { background-color: rgba(255, 255, 255, 0.65) !important; }
+        [data-theme="light"] .bg-white\\/\\[0\\.03\\] { background-color: rgba(255, 255, 255, 0.5) !important; }
+        [data-theme="light"] .bg-white\\/\\[0\\.02\\] { background-color: rgba(255, 255, 255, 0.4) !important; }
+        [data-theme="light"] .hover\\:bg-white\\/\\[0\\.08\\]:hover { background-color: rgba(255, 255, 255, 0.85) !important; }
+        [data-theme="light"] .hover\\:bg-white\\/\\[0\\.06\\]:hover { background-color: rgba(255, 255, 255, 0.75) !important; }
+        [data-theme="light"] .hover\\:bg-white\\/\\[0\\.12\\]:hover { background-color: rgba(255, 255, 255, 0.95) !important; }
+        [data-theme="light"] .border-white\\/10,
+        [data-theme="light"] .border-white\\/15,
+        [data-theme="light"] .border-white\\/5 { border-color: rgba(15, 23, 42, 0.12) !important; }
+        [data-theme="light"] .focus\\:border-white\\/30:focus { border-color: rgba(15, 23, 42, 0.3) !important; }
+        /* Text colors */
+        [data-theme="light"] .text-slate-100 { color: #0f172a !important; }
+        [data-theme="light"] .text-slate-200 { color: #1e293b !important; }
+        [data-theme="light"] .text-slate-300 { color: #334155 !important; }
+        [data-theme="light"] .text-slate-400 { color: #475569 !important; }
+        [data-theme="light"] .text-slate-500 { color: #64748b !important; }
+        [data-theme="light"] .text-slate-600 { color: #94a3b8 !important; }
+        [data-theme="light"] .placeholder\\:text-slate-500::placeholder { color: #94a3b8 !important; }
+        [data-theme="light"] .placeholder\\:text-slate-600::placeholder { color: #cbd5e1 !important; }
+        /* Inline-styled boxes (textareas, output panes) need an override too */
+        [data-theme="light"] textarea[style],
+        [data-theme="light"] input[type="text"][style],
+        [data-theme="light"] div[aria-live="polite"][style] {
+          background-color: rgba(255, 255, 255, 0.75) !important;
+          color: #0f172a !important;
+        }
+        /* Popover backgrounds (zone selector, date/time picker popups) */
+        [data-theme="light"] .bg-slate-900\\/80,
+        [data-theme="light"] .bg-slate-900\\/90 { background-color: rgba(255, 255, 255, 0.95) !important; }
+        /* Picker selected state stays indigo but lighter */
+        [data-theme="light"] .bg-indigo-500\\/30 { background-color: rgba(99, 102, 241, 0.85) !important; color: white !important; }
+        [data-theme="light"] .bg-indigo-500\\/20 { background-color: rgba(99, 102, 241, 0.18) !important; }
+        [data-theme="light"] .text-indigo-200,
+        [data-theme="light"] .text-indigo-300 { color: #4338ca !important; }
+        [data-theme="light"] .text-emerald-300 { color: #047857 !important; }
+        [data-theme="light"] .text-amber-300 { color: #b45309 !important; }
+        [data-theme="light"] .text-rose-300 { color: #be123c !important; }
       `}</style>
     </div>
   );
 }
 
-// --- Subcomponents ---
+
+// ═══════════════════════════════════════════════════════════════════
+// SHARED SUBCOMPONENTS
+// ═══════════════════════════════════════════════════════════════════
+
+
+function Toolbar({ theme, setTheme, layout, setLayout }) {
+  return (
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <ToggleGroup
+        ariaLabel="Theme"
+        value={theme}
+        onChange={setTheme}
+        options={[
+          { value: "dark", label: "dark", icon: "🌙" },
+          { value: "light", label: "light", icon: "☀" },
+        ]}
+      />
+      <ToggleGroup
+        ariaLabel="Layout"
+        value={layout}
+        onChange={setLayout}
+        options={[
+          { value: "stack", label: "stack", icon: "▤" },
+          { value: "bento", label: "bento", icon: "▦" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function ToggleGroup({ ariaLabel, value, onChange, options }) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-0.5"
+    >
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            title={opt.label}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-mono transition-all duration-200 ${
+              active
+                ? "bg-white/[0.12] text-slate-100 shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]"
+            }`}
+          >
+            <span aria-hidden="true">{opt.icon}</span>
+            <span className="hidden sm:inline">{opt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function Label({ children }) {
   return (
@@ -800,7 +1015,11 @@ function OverlapBar({ startHour, endHour }) {
   );
 }
 
-// --- Button-styled date picker that matches the From timezone aesthetic ---
+
+// ═══════════════════════════════════════════════════════════════════
+// DATE & TIME PICKERS (custom buttons)
+// ═══════════════════════════════════════════════════════════════════
+
 function DatePickerButton({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -870,8 +1089,16 @@ function DatePickerButton({ value, onChange }) {
 // --- Button-styled time picker matching same aesthetic ---
 function TimePickerButton({ value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [invalid, setInvalid] = useState(false);
   const ref = useRef(null);
 
+  // Sync draft when external value changes (e.g., picker selection)
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  // Close picker when clicking outside
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e) => {
@@ -885,40 +1112,81 @@ function TimePickerButton({ value, onChange }) {
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
-  const update = (newH, newMi) => {
+  const updateFromPicker = (newH, newMi) => {
     onChange(`${String(newH).padStart(2, "0")}:${String(newMi).padStart(2, "0")}`);
   };
 
-  // Snap displayed minute to nearest 5-min option for the picker, but show the actual value
-  const displayMinute = String(mi).padStart(2, "0");
-  const displayHour = String(h).padStart(2, "0");
+  // Brief shake + revert when user types something invalid
+  const flagInvalid = () => {
+    setInvalid(true);
+    setDraft(value);
+    setTimeout(() => setInvalid(false), 300);
+  };
+
+  // Validate and commit typed text. Accepts "9", "9:30", "09:30", "930", "0930".
+  const commitDraft = () => {
+    const cleaned = draft.trim();
+    if (cleaned === value) return; // no change
+    let parsedH, parsedM;
+
+    const colon = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+    const noColon = cleaned.match(/^(\d{1,2})(\d{2})$/);
+    const hourOnly = cleaned.match(/^(\d{1,2})$/);
+
+    if (colon) { parsedH = +colon[1]; parsedM = +colon[2]; }
+    else if (noColon && cleaned.length >= 3) { parsedH = +noColon[1]; parsedM = +noColon[2]; }
+    else if (hourOnly) { parsedH = +hourOnly[1]; parsedM = 0; }
+    else { flagInvalid(); return; }
+
+    if (parsedH < 0 || parsedH > 23 || parsedM < 0 || parsedM > 59) {
+      flagInvalid();
+      return;
+    }
+    onChange(`${String(parsedH).padStart(2, "0")}:${String(parsedM).padStart(2, "0")}`);
+  };
 
   return (
     <div className="relative min-w-0" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full text-left rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-4 py-3 hover:bg-white/[0.08] hover:scale-[1.01] transition-all duration-200"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-slate-100 font-mono tabular-nums">
-            {displayHour}:{displayMinute}
-          </span>
-          <span className="text-xs text-slate-400 flex-shrink-0">▼</span>
-        </div>
-      </button>
+      <div className={`w-full rounded-xl border bg-white/[0.04] backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-200 flex items-center ${
+        invalid ? "border-rose-400/60 shake" : "border-white/10"
+      }`}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.target.blur(); }
+            if (e.key === "Escape") { setDraft(value); e.target.blur(); }
+          }}
+          placeholder="HH:MM"
+          aria-label="Time"
+          style={{ backgroundColor: "transparent", color: "#f1f5f9" }}
+          className="flex-1 min-w-0 px-4 py-3 text-sm font-mono tabular-nums bg-transparent focus:outline-none placeholder:text-slate-500"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Open time picker"
+          className="px-3 py-3 text-xs text-slate-400 hover:text-slate-200 flex-shrink-0 border-l border-white/5"
+        >
+          ▼
+        </button>
+      </div>
       {open && (
         <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-slate-900/90 backdrop-blur-2xl p-3 animate-[fadeIn_0.18s_ease-out]">
           <div className="grid grid-cols-2 gap-2">
             <PickerColumn
               options={hours.map((hh) => ({ value: hh, label: String(hh).padStart(2, "0") }))}
               value={h}
-              onChange={(v) => update(v, mi)}
+              onChange={(v) => updateFromPicker(v, mi)}
             />
             <PickerColumn
               options={minutes.map((mm) => ({ value: mm, label: String(mm).padStart(2, "0") }))}
-              value={mi >= 58 ? 55 : minutes.reduce((prev, curr) => (Math.abs(curr - mi) < Math.abs(prev - mi) ? curr : prev))}
-              onChange={(v) => update(h, v)}
+              value={mi}
+              snapTo={mi}
+              onChange={(v) => updateFromPicker(h, v)}
             />
           </div>
           <button
@@ -933,9 +1201,21 @@ function TimePickerButton({ value, onChange }) {
   );
 }
 
-// Scrollable column of options used inside the date/time pickers
-function PickerColumn({ options, value, onChange }) {
+// Scrollable column of options used inside the date/time pickers.
+// `snapTo` optionally finds the option closest to the given value
+// (used by the minute column where minutes are in 5-min increments
+// but the actual time can be any minute).
+function PickerColumn({ options, value, onChange, snapTo }) {
   const ref = useRef(null);
+
+  // If snapTo is provided, find the closest option to that value
+  const effectiveValue = snapTo != null
+    ? options.reduce(
+        (best, opt) =>
+          Math.abs(opt.value - snapTo) < Math.abs(best.value - snapTo) ? opt : best,
+        options[0]
+      ).value
+    : value;
 
   // Scroll selected item into view when opened
   useEffect(() => {
@@ -946,7 +1226,7 @@ function PickerColumn({ options, value, onChange }) {
   return (
     <div ref={ref} className="max-h-48 overflow-y-auto rounded-lg bg-white/[0.02] border border-white/5 p-1">
       {options.map((opt) => {
-        const selected = opt.value === value;
+        const selected = opt.value === effectiveValue;
         return (
           <button
             key={opt.value}
@@ -966,8 +1246,12 @@ function PickerColumn({ options, value, onChange }) {
   );
 }
 
-// --- Paste a document, get all times converted to UTC inline ---
-function DocumentConverter() {
+
+// ═══════════════════════════════════════════════════════════════════
+// DOCUMENT CONVERTER UI
+// ═══════════════════════════════════════════════════════════════════
+
+function DocumentConverter({ isBento }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [count, setCount] = useState(0);
@@ -1004,7 +1288,9 @@ function DocumentConverter() {
   };
 
   return (
-    <section className="mt-8 rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-2xl p-4 sm:p-8 animate-[fadeIn_0.4s_ease-out]">
+    <section className={`${CARD_CLASS} ${
+      isBento ? "lg:col-span-12" : "mt-8"
+    }`}>
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
         <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">
           Paste a document — convert every time to UTC
@@ -1079,13 +1365,25 @@ function DocumentConverter() {
 
       {/* Action row */}
       <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
-        <button
-          onClick={handleConvert}
-          disabled={!input.trim()}
-          className="rounded-xl border border-white/10 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-        >
-          Convert all times →
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleConvert}
+            disabled={!input.trim()}
+            aria-label="Convert all times to UTC"
+            className="rounded-xl border border-white/10 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            Convert all times →
+          </button>
+          {(input || output) && (
+            <button
+              onClick={handleClear}
+              aria-label="Clear all text"
+              className="rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] px-4 py-2.5 text-sm text-slate-300 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         {count > 0 && (
           <span className="text-xs text-emerald-300 animate-[fadeIn_0.3s_ease-out]">
             ✓ Converted {count} time{count === 1 ? "" : "s"}
@@ -1117,5 +1415,373 @@ function ConvertedDisplay({ original, converted }) {
         )
       )}
     </>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// EPOCH / UNIX TIMESTAMP CONVERTER
+// ═══════════════════════════════════════════════════════════════════
+
+function EpochConverter({ isBento, now }) {
+  const liveEpoch = Math.floor(now.getTime() / 1000);
+  const [unit, setUnit] = useState("seconds"); // "seconds" | "milliseconds"
+  const [epochInput, setEpochInput] = useState("");
+  const [humanInput, setHumanInput] = useState(""); // ISO-ish string
+
+  // Auto-detect unit from input length and convert epoch → human
+  const epochResult = useMemo(() => {
+    const cleaned = epochInput.replace(/[,_\s]/g, "");
+    if (!cleaned || !/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+    const num = parseFloat(cleaned);
+    if (isNaN(num)) return null;
+
+    // Auto-detect: 10 digits = seconds, 13 digits = milliseconds, 16 = microseconds
+    let ms;
+    let detected;
+    const absLen = Math.abs(Math.floor(num)).toString().length;
+    if (unit === "auto" || !unit) {
+      if (absLen >= 16) { ms = num / 1000; detected = "microseconds"; }
+      else if (absLen >= 13) { ms = num; detected = "milliseconds"; }
+      else { ms = num * 1000; detected = "seconds"; }
+    } else if (unit === "milliseconds") {
+      ms = num;
+      detected = "milliseconds";
+    } else {
+      ms = num * 1000;
+      detected = "seconds";
+    }
+
+    const date = new Date(ms);
+    if (isNaN(date.getTime())) return null;
+
+    const utcStr = date.toISOString().replace("T", " ").replace(".000Z", " UTC");
+    const localStr = date.toLocaleString(undefined, {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
+    });
+    const relative = formatRelative(date);
+
+    return { date, utcStr, localStr, relative, detected };
+  }, [epochInput, unit]);
+
+  // Convert human ISO-ish input → epoch
+  const humanResult = useMemo(() => {
+    if (!humanInput.trim()) return null;
+    // Accept "2026-06-09 14:30" or "2026-06-09T14:30:00Z" etc.
+    const normalized = humanInput.trim().replace(" ", "T");
+    const date = new Date(normalized.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(normalized) ? normalized : normalized + "Z");
+    if (isNaN(date.getTime())) return null;
+    const seconds = Math.floor(date.getTime() / 1000);
+    const ms = date.getTime();
+    return { seconds, ms, iso: date.toISOString() };
+  }, [humanInput]);
+
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); } catch {}
+  };
+
+  const useNow = () => {
+    setEpochInput(String(Math.floor(Date.now() / 1000)));
+    setUnit("seconds");
+  };
+
+  return (
+    <section className={`${CARD_CLASS} ${
+      isBento ? "lg:col-span-7" : "mt-6"
+    }`}>
+      <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+        <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">
+          Epoch / Unix timestamp converter
+        </h2>
+        <span className="text-[10px] text-slate-500 font-mono">$ date +%s</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        Convert between Unix timestamps and human-readable dates. Auto-detects seconds vs milliseconds.
+      </p>
+
+      {/* Live epoch ticker */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 mb-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400 mb-1">Current epoch (seconds)</div>
+            <div className="text-2xl sm:text-3xl font-mono font-light tabular-nums text-slate-100">
+              {liveEpoch}
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+              {liveEpoch * 1000} ms
+            </div>
+          </div>
+          <button
+            onClick={() => copy(String(liveEpoch))}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/[0.08] hover:scale-105 transition-all duration-200"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        {/* Epoch → Human */}
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <Label>Epoch → Human</Label>
+            <div className="flex gap-1">
+              <UnitToggle value={unit} onChange={setUnit} option="seconds" label="s" />
+              <UnitToggle value={unit} onChange={setUnit} option="milliseconds" label="ms" />
+            </div>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={epochInput}
+              onChange={(e) => setEpochInput(e.target.value)}
+              placeholder="1717902000"
+              style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+              className="flex-1 min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-4 py-3 text-sm placeholder:text-slate-500 focus:outline-none focus:border-white/30 transition-all duration-200 font-mono"
+            />
+            <button
+              onClick={useNow}
+              className="rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 py-3 text-xs text-slate-300 hover:bg-white/[0.08] hover:scale-[1.02] transition-all duration-200 flex-shrink-0"
+            >
+              Now
+            </button>
+          </div>
+          {epochResult ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2 animate-[fadeIn_0.3s_ease-out]">
+              <Row label="UTC" value={epochResult.utcStr} onCopy={() => copy(epochResult.utcStr)} mono />
+              <Row label="Local" value={epochResult.localStr} onCopy={() => copy(epochResult.localStr)} />
+              <Row label="Relative" value={epochResult.relative} muted />
+            </div>
+          ) : epochInput ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300">
+              Not a valid timestamp
+            </div>
+          ) : null}
+        </div>
+
+        {/* Human → Epoch */}
+        <div className="min-w-0">
+          <Label>Human → Epoch</Label>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={humanInput}
+              onChange={(e) => setHumanInput(e.target.value)}
+              placeholder="2026-06-09 14:30:00"
+              aria-label="Human-readable date and time"
+              style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+              className="flex-1 min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-4 py-3 text-sm placeholder:text-slate-500 focus:outline-none focus:border-white/30 transition-all duration-200 font-mono"
+            />
+            <button
+              onClick={() => setHumanInput(new Date().toISOString().replace("T", " ").slice(0, 19))}
+              aria-label="Fill in current time"
+              className="rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl px-3 py-3 text-xs text-slate-300 hover:bg-white/[0.08] hover:scale-[1.02] transition-all duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            >
+              Now
+            </button>
+          </div>
+          {humanResult ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2 animate-[fadeIn_0.3s_ease-out]">
+              <Row label="Seconds" value={String(humanResult.seconds)} onCopy={() => copy(String(humanResult.seconds))} mono />
+              <Row label="Milliseconds" value={String(humanResult.ms)} onCopy={() => copy(String(humanResult.ms))} mono />
+              <Row label="ISO 8601" value={humanResult.iso} onCopy={() => copy(humanResult.iso)} mono />
+            </div>
+          ) : humanInput ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300">
+              Use format <span className="font-mono">YYYY-MM-DD HH:MM:SS</span>. Treated as UTC unless a zone is given.
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              Try: <button onClick={() => setHumanInput("2026-06-09 14:30:00")} className="font-mono text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline">2026-06-09 14:30:00</button>
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Reference row */}
+      <div className="mt-5 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-[11px] text-slate-500 font-mono">
+        <span className="text-slate-400"># reference: </span>
+        seconds = 10 digits · milliseconds = 13 digits · epoch starts 1970-01-01 00:00:00 UTC
+      </div>
+    </section>
+  );
+}
+
+// Small row used in EpochConverter result cards
+function Row({ label, value, onCopy, mono, muted }) {
+  return (
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <span className="text-[10px] uppercase tracking-[0.12em] text-slate-400 flex-shrink-0 w-20">{label}</span>
+      <span className={`flex-1 min-w-0 truncate text-sm ${mono ? "font-mono" : ""} ${muted ? "text-slate-400" : "text-slate-100"}`}>
+        {value}
+      </span>
+      {onCopy && (
+        <button
+          onClick={onCopy}
+          className="text-[10px] text-slate-400 hover:text-slate-200 border border-white/10 rounded px-2 py-0.5 hover:bg-white/[0.06] transition-colors flex-shrink-0"
+        >
+          Copy
+        </button>
+      )}
+    </div>
+  );
+}
+
+function UnitToggle({ value, onChange, option, label }) {
+  const active = value === option;
+  return (
+    <button
+      onClick={() => onChange(option)}
+      className={`text-[10px] font-mono px-2 py-1 rounded border transition-all duration-200 ${
+        active
+          ? "bg-indigo-500/20 border-indigo-400/30 text-indigo-200"
+          : "bg-white/[0.04] border-white/10 text-slate-400 hover:bg-white/[0.08]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// Human-friendly "5 minutes ago" / "in 3 days" from a Date
+function formatRelative(date) {
+  const diffMs = date.getTime() - Date.now();
+  const absMs = Math.abs(diffMs);
+  const future = diffMs > 0;
+  const units = [
+    { ms: 1000 * 60 * 60 * 24 * 365, name: "year" },
+    { ms: 1000 * 60 * 60 * 24 * 30, name: "month" },
+    { ms: 1000 * 60 * 60 * 24 * 7, name: "week" },
+    { ms: 1000 * 60 * 60 * 24, name: "day" },
+    { ms: 1000 * 60 * 60, name: "hour" },
+    { ms: 1000 * 60, name: "minute" },
+    { ms: 1000, name: "second" },
+  ];
+  for (const u of units) {
+    if (absMs >= u.ms) {
+      const n = Math.floor(absMs / u.ms);
+      return future ? `in ${n} ${u.name}${n === 1 ? "" : "s"}` : `${n} ${u.name}${n === 1 ? "" : "s"} ago`;
+    }
+  }
+  return "just now";
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// FEEDBACK SECTION
+// ═══════════════════════════════════════════════════════════════════
+
+function FeedbackSection({ isBento }) {
+  const FEEDBACK_EMAIL = "feedback@utcly.com"; // ← swap this for your real email
+  const [category, setCategory] = useState("bug");
+  const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const categories = [
+    { id: "bug", label: "Bug" },
+    { id: "feature", label: "Feature idea" },
+    { id: "other", label: "Other" },
+  ];
+
+  const buildPayload = () => {
+    const categoryLabel = categories.find((c) => c.id === category)?.label || "Other";
+    return (
+      `To: ${FEEDBACK_EMAIL}\n` +
+      `Subject: UTCly feedback — ${categoryLabel}\n\n` +
+      `${message.trim()}\n\n` +
+      `---\n` +
+      `Sent from utcly.com\n` +
+      `Browser: ${typeof navigator !== "undefined" ? navigator.userAgent : "unknown"}\n` +
+      `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}\n` +
+      `Date: ${new Date().toISOString()}`
+    );
+  };
+
+  const handleCopy = async () => {
+    if (!message.trim()) return;
+    try {
+      await navigator.clipboard.writeText(buildPayload());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <section className={`${CARD_CLASS} ${
+      isBento ? "lg:col-span-5" : "mt-6"
+    }`}>
+      <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+        <h2 className="text-xs uppercase tracking-[0.18em] text-slate-400">
+          Feedback &amp; bug reports
+        </h2>
+        <span className="text-[10px] text-slate-500 font-mono">$ echo $FEEDBACK</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        Found a bug or have an idea? Write it below, click copy, then paste it into an email to{" "}
+        <span className="text-slate-300 font-mono">{FEEDBACK_EMAIL}</span>.
+      </p>
+
+      {/* Category pills */}
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {categories.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => setCategory(c.id)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-all duration-200 ${
+              category === c.id
+                ? "bg-indigo-500/20 border-indigo-400/30 text-indigo-200"
+                : "bg-white/[0.04] border-white/10 text-slate-400 hover:bg-white/[0.08]"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <Label>Your message</Label>
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder={
+          category === "bug"
+            ? "Describe what went wrong, and what you expected to happen..."
+            : category === "feature"
+            ? "What would you like to see added or changed?"
+            : "Anything else you'd like to share?"
+        }
+        rows={5}
+        style={{ backgroundColor: "rgba(15, 23, 42, 0.6)", color: "#f1f5f9" }}
+        className="w-full min-w-0 rounded-xl border border-white/10 backdrop-blur-xl px-4 py-3 text-sm placeholder:text-slate-500 focus:outline-none focus:border-white/30 transition-all duration-200 resize-y leading-relaxed"
+      />
+
+      <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+        <button
+          onClick={handleCopy}
+          disabled={!message.trim()}
+          className="rounded-xl border border-white/10 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          {copied ? "✓ Copied — paste into email" : "Copy feedback to clipboard"}
+        </button>
+        <span className="text-[11px] text-slate-500">
+          No data is sent automatically. Privacy preserved.
+        </span>
+      </div>
+
+      {copied && (
+        <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300 animate-[fadeIn_0.3s_ease-out]">
+          Copied! Open your email app, paste, and send to{" "}
+          <span className="font-mono">{FEEDBACK_EMAIL}</span>.
+        </div>
+      )}
+    </section>
   );
 }
